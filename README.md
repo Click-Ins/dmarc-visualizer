@@ -236,7 +236,7 @@ docker compose logs -f grafana
 
 ### Resetting the poller state
 
-If you need to re-download all files from Drive:
+If you need to re-download all files from Drive (`can be done in exceptional cases only since the process may take weeks!`):
 
 ```bash
 docker compose stop gdrive-poller
@@ -261,6 +261,19 @@ docker compose down
 docker compose up -d --build
 ```
 
+### Maintaining the GeoLite database for IP2Country Lookups
+
+MaxMind's GeoLite2 Country can be directly downloaded from the following links which are frequently updated:
+
+URL1:
+https://git.io/GeoLite2-Country.mmdb
+
+URL2:
+https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb
+
+The database file, once downloaded, must be put inside the parsedmarc container (or the service should be rebuilt with the new file to update the reverse lookup database)
+
+
 ### Elasticsearch version upgrades
 
 Elasticsearch indexes are not forward-compatible across major versions (Lucene format changes). When upgrading ES major versions (e.g. 7→9), the `./elastic_data/` directory must be wiped. Back it up first with a temporary ES 7.x container and `elasticdump` if data needs to be preserved.
@@ -269,7 +282,7 @@ Elasticsearch indexes are not forward-compatible across major versions (Lucene f
 
 ## Security Notes
 
-- Never commit `.env`, `creds/`, or `gdrive_state/` to version control — add them to `.gitignore`
+- Never commit `.env` to version control — add them to `.gitignore`
 - The service account should have **Viewer** access only to the specific Drive folder, not the entire Drive
 - Elasticsearch runs without authentication (`xpack.security.enabled=false`) — do not expose port 9200 publicly
 - Grafana anonymous access is enabled — do not expose port 3000 publicly without additional authentication

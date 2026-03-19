@@ -19,11 +19,11 @@ services:
     volumes:
       - ./elastic_data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
-      interval: 15s      # Check every 15 seconds
-      timeout: 10s       # Fail if no response within 10 seconds
-      retries: 10        # Try up to 10 times (~2.5 minutes total)
-      start_period: 90s  # Give ES 90 seconds to boot before first check
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -c '\"status\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   grafana:
     build: ./grafana/
@@ -47,7 +47,6 @@ services:
       - ./files:/input
       - ./processed:/input/processed
       - ./gdrive_state:/state
-      - ./creds/gdrive_sa.json:/creds/gdrive_sa.json:ro
     restart: unless-stopped
     depends_on:
       elasticsearch:
