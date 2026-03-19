@@ -3,19 +3,28 @@ services:
   parsedmarc:
     build: ./parsedmarc/
     volumes:
-      - ./files:/input:ro
+      - ./files:/input
+      - ./processed:/input/processed
       - ./output_files:/output
-    command: parsedmarc -c /parsedmarc.ini /input/* --debug
+    command: /run.sh
     depends_on:
-      - elasticsearch
-    restart: on-failure
+      elasticsearch:
+        condition: service_healthy   # Wait until ES passes its healthcheck
+    restart: unless-stopped
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.5
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.1
     environment:
       - discovery.type=single-node
+      - xpack.security.enabled=false   # ES 8+ enables TLS+auth by default; disable for internal use
     volumes:
       - ./elastic_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 15s      # Check every 15 seconds
+      timeout: 10s       # Fail if no response within 10 seconds
+      retries: 10        # Try up to 10 times (~2.5 minutes total)
+      start_period: 30s  # Give ES 30 seconds to boot before first check
 
   grafana:
     build: ./grafana/
@@ -25,3 +34,22 @@ services:
     environment:
       GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-worldmap-panel
       GF_AUTH_ANONYMOUS_ENABLED: 'true'
+    depends_on:
+      elasticsearch:
+        condition: service_healthy   # Grafana also needs ES up before it loads dashboards
+
+  gdrive-poller:
+    build: ./gdrive_poller/
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./files:/input
+      - ./processed:/input/processed
+      - ./gdrive_state:/state
+      - ./creds/gdrive_sa.json:/creds/gdrive_sa.json:ro
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
