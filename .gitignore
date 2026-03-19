@@ -3,5 +3,4 @@
 /parsedmarc/GeoLite2-Country*
 /elastic_data/
 /processed/
-/creds/
 .env

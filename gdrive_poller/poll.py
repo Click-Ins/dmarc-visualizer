@@ -5,7 +5,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-CREDS_FILE    = os.environ.get("GDRIVE_CREDS_FILE", "/creds/gdrive_sa.json")
+#CREDS_FILE    = os.environ.get("GDRIVE_CREDS_FILE", "/creds/gdrive_sa.json")
 FOLDER_ID     = os.environ["GDRIVE_FOLDER_ID"]
 OUTPUT_DIR    = Path("/input")
 STATE_FILE    = Path("/state/seen.json")
@@ -14,9 +14,16 @@ STAGING_DIR   = OUTPUT_DIR / ".staging"
 STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_service():
-    creds = service_account.Credentials.from_service_account_file(
-        CREDS_FILE, scopes=["https://www.googleapis.com/auth/drive.readonly"]
+    
+    #creds = service_account.Credentials.from_service_account_file(
+    #    CREDS_FILE, scopes=["https://www.googleapis.com/auth/drive.readonly"]
+    #)
+    creds_dict = json.loads(os.environ["GCP_SERVICE_ACCOUNT_KEY"])
+
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict, scopes=["https://www.googleapis.com/auth/drive.readonly"]
     )
+
     return build("drive", "v3", credentials=creds)
 
 def load_seen():

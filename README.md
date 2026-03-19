@@ -6,7 +6,47 @@ Forked from [debricked/dmarc-visualizer](https://github.com/debricked/dmarc-visu
 
 ---
 
-## Architecture
+# DMARC Reports Extraction
+
+## 1. Overview
+This solution automates the extraction and storage of DMARC (Domain-based Message Authentication, Reporting, and Conformance) reports. It continuously monitors a designated Gmail inbox for incoming reports, extracts the attached `.zip` or `.gz` files, and routes them directly into a centralized Google Shared Drive for the IT/Security team to analyze, eliminating manual data entry.
+
+## 2. System Components
+The architecture relies entirely on native Google Workspace serverless components, requiring no external servers or third-party APIs:
+
+* **Data Source (Gmail):** Receives the raw DMARC XML reports from various email providers.
+* **Processing Engine (Google Apps Script):** A cloud-based JavaScript runtime that executes the extraction logic. 
+* **Storage (Google Shared Drive):** The secure, centralized repository where the extracted attachments are permanently stored.
+* **State Management (Gmail Labels):** Used as a tracking mechanism to ensure the script is idempotent (prevents duplicate downloads).
+* **Scheduler (Time-Driven Triggers):** Google's native cron-like scheduling system that executes the script automatically at defined intervals.
+
+## 3. Workflow and Data Flow
+The automation follows a strict, step-by-step execution cycle:
+
+1. **Trigger Initiation:** The Apps Script Time-Driven trigger fires (e.g., every hour).
+2. **Targeted Query:** The script queries the Gmail API using a highly specific search string: `has:attachment (dmarc OR subject:"Report domain:") -label:DMARC-Processed`. 
+3. **Batch Processing:** To respect Google's execution limits, the script fetches a strictly limited batch of email threads (e.g., 50 at a time).
+4. **Extraction:** The script iterates through the unread threads, parses the messages, and extracts the file attachments in memory.
+5. **File Routing:** The script connects to the designated Google Shared Drive using a hardcoded `Folder ID` and generates the files directly into that directory.
+6. **State Update:** Once the files are safely in Drive, the script applies the `DMARC-Processed` label to the Gmail thread.
+7. **Termination:** The script ends successfully. The next time it runs, the query naturally filters out the newly labeled emails, ensuring files are never downloaded twice.
+
+## 4. Performance and Limit Mitigation
+Google Apps Script enforces a strict **6-minute maximum execution time** per run. Because processing attachments is resource-intensive, a large backlog of emails will cause the script to time out. 
+
+To mitigate this, the architecture relies on two safety mechanisms:
+
+* **Micro-Batching:** The script uses pagination logic (`GmailApp.search(query, start, max)`) to force the script to stop after a safe number of emails (e.g., 50).
+* **High-Frequency Triggers:** By running the script on a two-hours cadence, the workload is distributed into small, easily digestible chunks that always process within the 6-minute window.
+
+## 5. Security and Permissions
+Because this script runs internally on Google's infrastructure, no data ever leaves the Google Workspace environment. The script requires the following OAuth scopes authorized by the deploying administrator:
+
+* `https://www.googleapis.com/auth/gmail.modify` (To read emails and apply labels)
+* `https://www.googleapis.com/auth/drive` (To read the Folder ID and write new files to the Shared Drive)
+
+
+# DMARC Reports Download and Processing
 
 ```
 Google Drive (Shared Drive folder)
@@ -75,14 +115,14 @@ cd dmarc-visualizer
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Enable **Google Drive API**
 2. Create a **Service Account** and download the JSON key
-3. Place the key at `./creds/gdrive_sa.json`
-4. In your Google Drive folder → Share → add the service account email (`...@...iam.gserviceaccount.com`) with **Viewer** access
+3. In your Google Drive folder → Share → add the service account email (`...@...iam.gserviceaccount.com`) with **Viewer** access
 
 ### 3. Configure environment variables
 
 Create a `.env` file in the project root:
 
 ```env
+GCP_SERVICE_ACCOUNT_KEY = 'THE_SERVICE_ACCOUNT_KEY_FULL_JSON_CONTENT_IS_HERE'
 GDRIVE_FOLDER_ID=your_shared_drive_folder_id_here
 POLL_INTERVAL=300
 ```
@@ -96,7 +136,7 @@ The folder ID is the string at the end of your Drive folder URL:
 docker compose up -d
 ```
 
-Elasticsearch takes ~30–45 seconds to become healthy. The other services wait for it automatically via `depends_on: condition: service_healthy`.
+Elasticsearch takes ~90 seconds to become healthy. The other services wait for it automatically via `depends_on: condition: service_healthy`.
 
 ### 5. Access Grafana
 
@@ -170,7 +210,7 @@ Entirely new service not present in the original. Consists of:
 - Installs `google-auth`, `google-auth-httplib2`, `google-api-python-client`
 
 **`gdrive_poller/poll.py`**
-- Authenticates to Google Drive API using a service account JSON key mounted at `/creds/gdrive_sa.json`
+- Authenticates to Google Drive API using a service account JSON key
 - Polls a configured Shared Drive folder every `POLL_INTERVAL` seconds
 - Paginates through all Drive results (`pageSize=1000` with `nextPageToken`) — the default API limit is 100 files per request
 - Tracks processed file IDs in `/state/seen.json` to avoid re-downloading
