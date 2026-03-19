@@ -4,3 +4,4 @@
 /elastic_data/
 /processed/
 .env
+/gdrive_state/

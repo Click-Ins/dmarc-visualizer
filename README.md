@@ -293,7 +293,6 @@ Elasticsearch indexes are not forward-compatible across major versions (Lucene f
 
 ```gitignore
 .env
-creds/
 elastic_data/
 gdrive_state/
 files/
